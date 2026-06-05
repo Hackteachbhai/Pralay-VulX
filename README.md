@@ -50,5 +50,5 @@ Pralay.VulX is a powerful, all-in-one vulnerability scanner that combines **netw
 
 ### Step 1: Clone the repository
 ```bash
-git clone https://github.com/YOUR_USERNAME/Pralay-VulX.git
+git clone https://github.com/Hackteachbhai/Pralay-VulX  
 cd Pralay-VulX
