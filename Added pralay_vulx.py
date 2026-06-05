@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Pralay.VulX - Ultimate Vulnerability Scanner with Severity & Parameter Info
+Pralay.VulX - Ultimate Vulnerability Scanner
 Author: Vimal Bijalwan
-Version: 3.0 (Real Vulns + Severity Levels)
+Version: 3.1 (No False Positives)
 """
 
 import sys
@@ -36,7 +36,6 @@ COMMON_PARAMS = [
     "wid", "xid", "yid", "zid", "data", "json", "xml", "callback", "callback_func"
 ]
 
-# Each vuln type: payloads, detection function, severity
 VULN_DEFS = {
     "SQLi": {
         "payloads": ["'", "\"", "1' OR '1'='1", "1 AND 1=1", "1 AND 1=2", "' OR '1'='1' --"],
@@ -59,8 +58,8 @@ VULN_DEFS = {
         "severity": "CRITICAL"
     },
     "SSTI": {
-        "payloads": ["{{7*7}}", "${7*7}", "{{7*'7'}}"],
-        "detect": lambda text: "49" in text and "7*7" not in text,
+        "payloads": ["{{7*7}}", "${7*7}", "{{7*'7'}}", "<% 7*7 %>"],
+        "detect": lambda text, payload: "49" in text and payload not in text and "7*7" not in text,
         "severity": "HIGH"
     },
     "XXE": {
@@ -118,7 +117,7 @@ def crawl_params(start_url, depth=1):
                         params.add((form_url, method, name))
         except:
             continue
-    print(f"\n[*] Total parameters found: {len(params)}")
+    print(f"\n[*] Total parameters: {len(params)}")
     return list(params)
 
 def fuzz_params(params, delay=0.05):
@@ -137,7 +136,7 @@ def fuzz_params(params, delay=0.05):
                     full = f"{url}?{param}={payload}"
                     resp = requests.get(full, timeout=3, verify=False)
                     text = resp.text
-                    if vuln_type == "XSS":
+                    if vuln_type in ["XSS", "SSTI"]:
                         if data["detect"](text, payload):
                             findings.append((vuln_type, url, param, payload, data["severity"]))
                     else:
