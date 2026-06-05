@@ -1,43 +1,135 @@
-Pralay-VulX — Git User Manual
-╔══════════════════════════════════════════════════════════════╗
-║           PRALAY.VULX — Vimal Bijalwan Ed.                  ║
-║     "Real Vulns with Severity — No Fake Alerts"             ║
-╚══════════════════════════════════════════════════════════════╝
+# Pralay-VulX — A to Z Command Reference
 
-Step 1 — Pehli Baar Clone Karna
-bashgit clone https://github.com/Hackteachbhai/Pralay-VulX
-cd Pralay-VulX
+---
 
-Step 2 — Agar Folder Pehle Se Ho
-bashrm -rf Pralay-VulX
-git clone https://github.com/Hackteachbhai/Pralay-VulX
-cd Pralay-VulX
+## Basic Syntax
+```bash
+python3 'Added pralay_vulx.py' <target> [options]
+```
 
-Step 3 — Tool Run Karna
-bash# File ka naam space ke saath hai — quotes zaroori hain
-python3 'Added pralay_vulx.py' <target>
-Available Flags:
---ports PORTS       Specific ports scan karne ke liye
---crawl-url URL     Ek specific URL crawl karna
---stealth           Stealth mode enable karo
---tor               Traffic Tor se route karo
---no-nmap           Nmap scan skip karo
-Example with flags:
-bashpython3 'Added pralay_vulx.py' example.com --ports 80,443 --stealth
+---
 
-Step 4 — Latest Update Lena
-bashcd Pralay-VulX
-git pull origin main
+## Options
+| Option | Description |
+|--------|-------------|
+| `-h, --help` | Help message dikhao |
+| `--crawl-url URL` | Web crawling + fuzzing ke liye URL |
+| `--no-nmap` | Nmap skip karo, sirf web fuzzing |
+| `--ports PORTS` | Port range (80,443 ya 1-1000) |
+| `--stealth` | Firewall evasion mode |
+| `--tor` | Tor se route karo |
 
-Step 5 — Files Dekhna
-bashls -la
+---
 
-Step 6 — Fresh Start (Kuch Galat Ho Jaye)
-bashcd /home/kali
-rm -rf Pralay-VulX
-git clone https://github.com/Hackteachbhai/Pralay-VulX
-cd Pralay-VulX
-python3 'Added pralay_vulx.py' <target>
+## Common Commands
 
-Common Errors aur Fix
-ErrorMatlabFixfatal: destination path already existsFolder pehle se hairm -rf karke dobara clone karoNo such file or directoryFile ka naam galatls karo, quotes mein naam likhotarget requiredTarget nahi diyaCommand ke baad IP ya domain likho
+**Help dekho:**
+```bash
+python3 'Added pralay_vulx.py' -h
+```
+
+**Basic network scan:**
+```bash
+python3 'Added pralay_vulx.py' 192.168.1.1 --ports 1-1000
+```
+
+**Web fuzzing only (fast):**
+```bash
+python3 'Added pralay_vulx.py' example.com --no-nmap --crawl-url http://example.com
+```
+
+**Full scan (network + web):**
+```bash
+python3 'Added pralay_vulx.py' example.com --ports 80,443 --crawl-url http://example.com
+```
+
+**Stealth mode:**
+```bash
+python3 'Added pralay_vulx.py' target.com --ports 1-1000 --stealth
+```
+
+**Tor + Stealth (maximum anonymity):**
+```bash
+sudo systemctl start tor
+python3 'Added pralay_vulx.py' target.com --ports 80 --crawl-url http://target.com --stealth --tor
+```
+
+**Localhost scan:**
+```bash
+python3 'Added pralay_vulx.py' 127.0.0.1 --ports 1-1000
+```
+
+**Full port range (slow):**
+```bash
+python3 'Added pralay_vulx.py' 192.168.1.1 --ports 1-65535
+```
+
+**Output file mein save karo:**
+```bash
+python3 'Added pralay_vulx.py' target.com --no-nmap --crawl-url http://target.com 2>&1 | tee scan.log
+```
+
+**Multiple targets loop:**
+```bash
+for ip in 192.168.1.{1..10}; do python3 'Added pralay_vulx.py' $ip --ports 80; done
+```
+
+---
+
+## Flag Combinations
+| Combination | Command |
+|-------------|---------|
+| Stealth + Tor | `--stealth --tor` |
+| No Nmap + Crawl | `--no-nmap --crawl-url URL` |
+| Ports + Crawl | `--ports 80,443 --crawl-url URL` |
+| Sab kuch | `--ports 1-1000 --crawl-url URL --stealth --tor` |
+
+---
+
+## Output Severity Levels
+| Level | CVSS Score | Matlab |
+|-------|------------|--------|
+| `[CRITICAL]` | 9.0 - 10.0 | Turant fix karo |
+| `[HIGH]` | 7.0 - 8.9 | Jaldi patch karo |
+| `[MEDIUM]` | 4.0 - 6.9 | Plan banao |
+| `[LOW]` | 0 - 3.9 | Informational |
+
+---
+
+## Dependencies Install Karo
+```bash
+sudo apt update
+sudo apt install nmap proxychains4 tor -y
+pip install requests beautifulsoup4
+```
+
+---
+
+## Report Dekhna
+```bash
+cat PralayVulX_report_*.txt
+```
+
+---
+
+## Update Karna
+```bash
+cd /home/kali/Pralay-VulX
+git pull
+```
+
+---
+
+## Most Used Commands
+| Task | Command |
+|------|---------|
+| Help | `python3 'Added pralay_vulx.py' -h` |
+| Web test | `--no-nmap --crawl-url http://target.com` |
+| Network scan | `--ports 1-1000` |
+| Stealth | `--stealth` |
+| Full assessment | `--ports 80,443 --crawl-url http://target.com` |
+| Anonymous | `--tor --crawl-url http://target.com` |
+
+---
+
+> ⚠️ **Legal:** Sirf apne ya authorized systems pe use karo. Bina permission scan karna **illegal** hai.
