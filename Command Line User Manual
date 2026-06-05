@@ -1,1 +1,43 @@
+Pralay-VulX — Git User Manual
+╔══════════════════════════════════════════════════════════════╗
+║           PRALAY.VULX — Vimal Bijalwan Ed.                  ║
+║     "Real Vulns with Severity — No Fake Alerts"             ║
+╚══════════════════════════════════════════════════════════════╝
 
+Step 1 — Pehli Baar Clone Karna
+bashgit clone https://github.com/Hackteachbhai/Pralay-VulX
+cd Pralay-VulX
+
+Step 2 — Agar Folder Pehle Se Ho
+bashrm -rf Pralay-VulX
+git clone https://github.com/Hackteachbhai/Pralay-VulX
+cd Pralay-VulX
+
+Step 3 — Tool Run Karna
+bash# File ka naam space ke saath hai — quotes zaroori hain
+python3 'Added pralay_vulx.py' <target>
+Available Flags:
+--ports PORTS       Specific ports scan karne ke liye
+--crawl-url URL     Ek specific URL crawl karna
+--stealth           Stealth mode enable karo
+--tor               Traffic Tor se route karo
+--no-nmap           Nmap scan skip karo
+Example with flags:
+bashpython3 'Added pralay_vulx.py' example.com --ports 80,443 --stealth
+
+Step 4 — Latest Update Lena
+bashcd Pralay-VulX
+git pull origin main
+
+Step 5 — Files Dekhna
+bashls -la
+
+Step 6 — Fresh Start (Kuch Galat Ho Jaye)
+bashcd /home/kali
+rm -rf Pralay-VulX
+git clone https://github.com/Hackteachbhai/Pralay-VulX
+cd Pralay-VulX
+python3 'Added pralay_vulx.py' <target>
+
+Common Errors aur Fix
+ErrorMatlabFixfatal: destination path already existsFolder pehle se hairm -rf karke dobara clone karoNo such file or directoryFile ka naam galatls karo, quotes mein naam likhotarget requiredTarget nahi diyaCommand ke baad IP ya domain likho
